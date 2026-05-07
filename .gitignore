@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+venv/
+.env
+
+# Runtime data — your personal task database (not version controlled)
+tasks.db
+
+# Scratch/dev files
+test_llm.py
+
+# macOS
+.DS_Store
