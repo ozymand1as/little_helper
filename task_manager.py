@@ -2,7 +2,9 @@ import sqlite3
 import datetime
 import os
 
-DB_PATH = "tasks.db"
+# Database path is absolute, relative to this file
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(PROJECT_ROOT, "tasks.db")
 
 def dict_factory(cursor, row):
     d = {}
