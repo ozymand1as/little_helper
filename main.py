@@ -129,6 +129,128 @@ class HistoryScreen(ModalScreen):
             self.app.pop_screen()
 
 
+class EndDayScreen(ModalScreen):
+    """Modal to configure the deferral time for ending the day."""
+    BINDINGS = [
+        ("escape", "app.pop_screen", "Cancel"),
+        ("up", "increment", "Increment"),
+        ("down", "decrement", "Decrement"),
+        ("left", "prev_field", "Previous Field"),
+        ("right", "next_field", "Next Field"),
+        ("tab", "next_field", "Next Field"),
+        ("enter", "confirm", "Confirm"),
+    ]
+
+    def __init__(self):
+        super().__init__()
+        # Default to tomorrow at 10:30
+        now = datetime.datetime.now()
+        self.target_date = now.date() + datetime.timedelta(days=1)
+        self.hour = 10
+        self.minute = 30
+        self.focus_index = 0  # 0: Day, 1: Hour, 2: Minute
+
+    def compose(self) -> ComposeResult:
+        with Container(id="end-day-container"):
+            yield Static("Defer All Tasks To:", classes="modal-title")
+            with Horizontal(id="spinner-container"):
+                with Vertical(classes="spinner-col", id="col-day"):
+                    yield Static("▲", classes="arrow up")
+                    yield Static("", id="day-val", classes="val")
+                    yield Static("▼", classes="arrow down")
+                
+                with Vertical(classes="spinner-col", id="col-hour"):
+                    yield Static("▲", classes="arrow up")
+                    yield Static("", id="hour-val", classes="val")
+                    yield Static("▼", classes="arrow down")
+                
+                with Vertical(classes="spinner-col-sep"):
+                    yield Static(" ")
+                    yield Static(":", classes="sep")
+                    yield Static(" ")
+
+                with Vertical(classes="spinner-col", id="col-min"):
+                    yield Static("▲", classes="arrow up")
+                    yield Static("", id="min-val", classes="val")
+                    yield Static("▼", classes="arrow down")
+            
+            yield Static("Arrows to adjust • Enter to confirm", classes="modal-hint")
+            with Horizontal(id="modal-buttons"):
+                yield Button("Confirm [Enter]", variant="success", id="confirm-btn")
+                yield Button("Cancel [Esc]", variant="primary", id="cancel-btn")
+
+    def on_mount(self) -> None:
+        self._update_display()
+
+    def _update_display(self) -> None:
+        day_str = self.target_date.strftime("%A")
+        # If it's more than 7 days away, show the date too
+        if (self.target_date - datetime.date.today()).days > 6:
+             day_str = self.target_date.strftime("%a %d %b")
+        elif self.target_date == datetime.date.today() + datetime.timedelta(days=1):
+            day_str = "Tomorrow"
+        elif self.target_date == datetime.date.today():
+            day_str = "Today"
+
+        self.query_one("#day-val").update(day_str)
+        self.query_one("#hour-val").update(f"{self.hour:02d}")
+        self.query_one("#min-val").update(f"{self.minute:02d}")
+
+        # Update focus classes
+        for i, col_id in enumerate(["#col-day", "#col-hour", "#col-min"]):
+            col = self.query_one(col_id)
+            if i == self.focus_index:
+                col.add_class("focused")
+            else:
+                col.remove_class("focused")
+
+    def action_increment(self) -> None:
+        if self.focus_index == 0:
+            self.target_date += datetime.timedelta(days=1)
+        elif self.focus_index == 1:
+            self.hour = (self.hour + 1) % 24
+        elif self.focus_index == 2:
+            self.minute = (self.minute + 15) % 60
+        self._update_display()
+
+    def action_decrement(self) -> None:
+        if self.focus_index == 0:
+            # Don't allow deferring to the past
+            new_date = self.target_date - datetime.timedelta(days=1)
+            if new_date >= datetime.date.today():
+                self.target_date = new_date
+        elif self.focus_index == 1:
+            self.hour = (self.hour - 1) % 24
+        elif self.focus_index == 2:
+            self.minute = (self.minute - 15) % 60
+        self._update_display()
+
+    def action_next_field(self) -> None:
+        self.focus_index = (self.focus_index + 1) % 3
+        self._update_display()
+
+    def action_prev_field(self) -> None:
+        self.focus_index = (self.focus_index - 1) % 3
+        self._update_display()
+
+    def action_confirm(self) -> None:
+        dt = datetime.datetime(
+            self.target_date.year, self.target_date.month, self.target_date.day,
+            self.hour, self.minute
+        )
+        # Final sanity check: if user picks today but time has passed, warn or just allow
+        task_manager.defer_all_to_datetime(dt)
+        self.app.query_one(Log).write_line(f"All tasks deferred to {dt.strftime('%Y-%m-%d %H:%M')}")
+        self.app.action_refresh_tasks()
+        self.dismiss(True)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "confirm-btn":
+            self.action_confirm()
+        else:
+            self.app.pop_screen()
+
+
 class OzyHelperApp(App):
     CSS = """
     TaskTable { height: 1fr; }
@@ -162,6 +284,64 @@ class OzyHelperApp(App):
         border: solid $accent;
         height: 1fr;
         overflow-y: scroll;
+    }
+    #end-day-container {
+        border: thick $primary;
+        background: $surface;
+        width: 60;
+        height: 18;
+        padding: 1 2;
+        align: center middle;
+    }
+    .modal-title {
+        text-align: center;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+    .modal-hint {
+        text-align: center;
+        color: $text-muted;
+        margin-top: 1;
+    }
+    #spinner-container {
+        height: 7;
+        align: center middle;
+        margin: 1 0;
+    }
+    .spinner-col {
+        width: 16;
+        height: 7;
+        align: center middle;
+        border: solid $secondary;
+        margin: 0 1;
+    }
+    .spinner-col-sep {
+        width: 3;
+        height: 7;
+        align: center middle;
+    }
+    .sep {
+        text-style: bold;
+    }
+    .spinner-col.focused {
+        border: double $accent;
+        background: $accent 10%;
+        color: $accent;
+    }
+    .spinner-col .arrow {
+        color: $text-muted;
+        text-align: center;
+    }
+    .spinner-col.focused .arrow {
+        color: $accent;
+        text-style: bold;
+    }
+    .spinner-col .val {
+        text-align: center;
+        text-style: bold;
+    }
+    .spinner-col.focused .val {
+        text-style: bold;
     }
     """
 
@@ -266,13 +446,8 @@ class OzyHelperApp(App):
         self.push_screen(HistoryScreen())
 
     def action_end_day(self) -> None:
-        """Defers all active task prompts to next workday at 10:30."""
-        next_dt = task_manager.defer_all_to_next_workday(workday_hour=10, workday_minute=30)
-        day_name = next_dt.strftime("%A %d %b")
-        self.query_one(Log).write_line(
-            f"End of day: all tasks deferred to {day_name} at 10:30."
-        )
-        self.action_refresh_tasks()
+        """Opens modal to defer all active task prompts."""
+        self.push_screen(EndDayScreen())
 
     # ------------------------------------------------------------------ #
     # Task actions (called from both App and TaskTable bindings)          #

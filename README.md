@@ -1,6 +1,8 @@
+> *This is my ToDo app. There are many like it, but this one is mine.*
+
 # Ozy's Little Helper
 
-A local agentic task assistant with a terminal UI, macOS desktop notifications, and LLM-powered text summarisation.
+A local task assistant with a terminal UI, macOS desktop notifications, and LLM-powered text summarisation.
 
 ## Features
 - **Interactive TUI** built with [Textual](https://github.com/Textualize/textual)
@@ -8,7 +10,7 @@ A local agentic task assistant with a terminal UI, macOS desktop notifications, 
 - **Smart notifications**: macOS dialogs with Complete / Later buttons; notes are saved back to the task
 - **LLM summarisation**: raw input is cleaned into a short task title using a local llama.cpp model
 - **Live countdown** to the next prompt for each task
-- **End-of-day deferral**: one keypress postpones all tasks to next workday at 10:30
+- **End-of-day deferral**: one keypress postpones all tasks to a selectable date and time (default - tomorrow at 10:30)
 
 ## Keyboard shortcuts
 | Key | Action |

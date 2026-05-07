@@ -97,6 +97,18 @@ def reopen_task(task_id: int):
     conn.commit()
     conn.close()
 
+def defer_all_to_datetime(target_dt: "datetime.datetime"):
+    """Defers all active tasks to the given datetime."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    now = datetime.datetime.now()
+    cursor.execute('''
+        UPDATE tasks SET next_prompt_time = ?, updated_at = ?
+        WHERE status != 'completed'
+    ''', (target_dt, now))
+    conn.commit()
+    conn.close()
+
 def defer_all_to_next_workday(workday_hour: int = 10, workday_minute: int = 30):
     """
     Defers all active (non-completed) tasks to next workday at the given time.
