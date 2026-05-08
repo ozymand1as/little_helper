@@ -49,6 +49,7 @@ class TaskTable(DataTable):
         ("d", "app.delete_task", "Delete"),
         ("v", "app.view_details", ""),
         ("i", "app.cycle_interval", "Interval"),
+        ("I", "app.defer_task", "Defer To..."),
         ("enter", "app.view_details", ""),
     ]
 
@@ -129,8 +130,8 @@ class HistoryScreen(ModalScreen):
             self.app.pop_screen()
 
 
-class EndDayScreen(ModalScreen):
-    """Modal to configure the deferral time for ending the day."""
+class DeferScreen(ModalScreen):
+    """Modal to configure the deferral time for a task (or all tasks)."""
     BINDINGS = [
         ("escape", "app.pop_screen", "Cancel"),
         ("up", "increment", "Increment"),
@@ -141,7 +142,7 @@ class EndDayScreen(ModalScreen):
         ("enter", "confirm", "Confirm"),
     ]
 
-    def __init__(self):
+    def __init__(self, task_id: int = None):
         super().__init__()
         # Default to tomorrow at 10:30
         now = datetime.datetime.now()
@@ -149,10 +150,12 @@ class EndDayScreen(ModalScreen):
         self.hour = 10
         self.minute = 30
         self.focus_index = 0  # 0: Day, 1: Hour, 2: Minute
+        self.task_id = task_id
 
     def compose(self) -> ComposeResult:
         with Container(id="end-day-container"):
-            yield Static("Defer All Tasks To:", classes="modal-title")
+            title = "Defer All Tasks To:" if self.task_id is None else f"Defer Task [{self.task_id}] To:"
+            yield Static(title, classes="modal-title")
             with Horizontal(id="spinner-container"):
                 with Vertical(classes="spinner-col", id="col-day"):
                     yield Static("▲", classes="arrow up")
@@ -238,9 +241,13 @@ class EndDayScreen(ModalScreen):
             self.target_date.year, self.target_date.month, self.target_date.day,
             self.hour, self.minute
         )
-        # Final sanity check: if user picks today but time has passed, warn or just allow
-        task_manager.defer_all_to_datetime(dt)
-        self.app.query_one(Log).write_line(f"All tasks deferred to {dt.strftime('%Y-%m-%d %H:%M')}")
+        if self.task_id is None:
+            task_manager.defer_all_to_datetime(dt)
+            self.app.query_one(Log).write_line(f"All tasks deferred to {dt.strftime('%Y-%m-%d %H:%M')}")
+        else:
+            task_manager.defer_task_to_datetime(self.task_id, dt)
+            self.app.query_one(Log).write_line(f"Task {self.task_id} deferred to {dt.strftime('%Y-%m-%d %H:%M')}")
+        
         self.app.action_refresh_tasks()
         self.dismiss(True)
 
@@ -447,7 +454,15 @@ class OzyHelperApp(App):
 
     def action_end_day(self) -> None:
         """Opens modal to defer all active task prompts."""
-        self.push_screen(EndDayScreen())
+        self.push_screen(DeferScreen(task_id=None))
+
+    def action_defer_task(self) -> None:
+        """Opens modal to defer the selected task."""
+        t_id = self.get_selected_id()
+        if t_id:
+            self.push_screen(DeferScreen(task_id=t_id))
+        else:
+            self.query_one(Log).write_line("Select a task first.")
 
     # ------------------------------------------------------------------ #
     # Task actions (called from both App and TaskTable bindings)          #
